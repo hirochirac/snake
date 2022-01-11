@@ -12,7 +12,11 @@
 #include <SDL2/SDL_main.h>
 #include <SDL2/SDL.h>
 
-typedef struct {
+const int HEIGHT = 800;
+const int WIDTH  = 800;
+const int SCL    = 20;
+
+typedef struct Snake_t {
 	int w;
 	int h;
 	int x;
@@ -21,6 +25,7 @@ typedef struct {
 	int speedY;
 	int dirX;
 	int dirY;
+	struct Snake_t * next;
 } Snake;
 
 
@@ -31,16 +36,18 @@ typedef struct {
 	int y;
 } Apple;
 
-
-Apple * init_apple (int scl, int w, int h) {
-	Apple * apple = malloc(sizeof(Apple));
-	int cols = floor(w/scl);
-	int rows = floor(h/scl);
+/**
+ *
+ */
+Apple * init_apple (int w, int h) {
+	Apple * apple = (Apple * ) malloc(sizeof(Apple));
+	int cols = floor(w/SCL);
+	int rows = floor(h/SCL);
 	if (apple != NULL) {
-		apple->h = scl;
-		apple->w = scl;
-		apple->x = floor(rand() % cols) * scl;
-	    apple->y = floor(rand() % rows) * scl;
+		apple->h = SCL;
+		apple->w = SCL;
+		apple->x = floor(rand() % cols) * SCL;
+	    apple->y = floor(rand() % rows) * SCL;
 	}
 	return apple;
 }
@@ -49,36 +56,72 @@ Apple * init_apple (int scl, int w, int h) {
 /**
  *
  */
-Snake * init_snake (int scl, int x, int y, int spdX, int spdY) {
-	Snake * s = malloc(sizeof(Snake));
+Snake * init_snake (int x, int y, int spdX, int spdY) {
+	Snake * s = (Snake * ) malloc(sizeof(Snake));
 	if (s != NULL) {
-		s->w = scl;
-		s->h = scl;
+		s->w = SCL;
+		s->h = SCL;
 		s->x = x;
 		s->y = y;
 		s->speedX = spdX;
 		s->speedY = spdY;
 		s->dirX = 0;
 		s->dirY = 1;
+		s->next = NULL;
 		return s;
 	} else {
 		return NULL;
 	}
 }
 
+
 /**
  *
  */
+Snake * snake_add_tail (Snake * head) {
 
+	if (head != NULL) {
+	  Snake * new = init_snake(0, 0, 0, 0);
+      Snake * end = (Snake * ) malloc(sizeof(Snake));
+
+	  if (new != NULL) {
+		  if (head->next == NULL) {
+			  head->next = new;
+		  } else {
+			 end = head->next;
+			 end->next = new;
+			 head->next = end;
+		  }
+	  }
+
+
+	}
+
+	return head;
+}
+
+
+/**
+ *
+ */
 void draw_snake (SDL_Renderer * renderer, Snake * snake) {
+	Snake * tmp;
 	SDL_Rect rect;
-	rect.h = snake->h;
-	rect.w = snake->w;
-	rect.x = snake->x;
-	rect.y = snake->y;
-	SDL_SetRenderDrawColor(renderer,0, 255, 0, 255);
-	SDL_RenderFillRect(renderer, &rect);
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+
+
+	tmp = snake;
+	while (tmp != NULL) {
+		rect.h = snake->h;
+		rect.w = snake->w;
+		rect.x = snake->x;
+		rect.y = snake->y;
+		SDL_SetRenderDrawColor(renderer,0, 255, 0, 255);
+		SDL_RenderFillRect(renderer, &rect);
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		tmp = tmp->next;
+	}
+
+
 }
 
 
@@ -100,28 +143,43 @@ void draw_apple (SDL_Renderer * renderer, Apple * apple) {
 /**
  *
  */
-int snake_eat (Apple * apple, Snake * snake, int scl) {
-	int res = 0;
+int snake_eat (SDL_Renderer * renderer, Apple * apple, Snake * snake) {
+	double snake_mX = (snake->x + snake->x + SCL)/2.0;
+	double snake_mY = (snake->y + snake->y + SCL)/2.0;
 
-	double snake_mX = (snake->x + snake->x + scl)/2.0;
-	double snake_mY = (snake->y + snake->y + scl)/2.0;
+	double apple_mX = (apple->x + apple->x + SCL)/2.0;
+	double apple_mY = (apple->y + apple->y + SCL)/2.0;
 
-	double apple_mX = (apple->x + apple->x + scl)/2.0;
-	double apple_mY = (apple->y + apple->y + scl)/2.0;
+	/*SDL_SetRenderDrawColor(renderer,255, 255, 0, 255);
+	SDL_RenderDrawLine(renderer,
+			            floor(snake_mX),
+						floor(snake_mY),
+						floor(apple_mX),
+						floor(apple_mY));
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);*/
 
 	double dist = (abs((snake_mX * snake_mX) - (apple_mX * apple_mX)) + abs((snake_mY * snake_mY) - (apple_mY * apple_mY)));
 
-	return sqrt(dist) >= 0.0 && sqrt(dist) <= 100.0;
+	return sqrt(dist) >= 0.0 && sqrt(dist) <= 70.0;
 }
 
 /**
  *
  */
-int main (int argc, char** argv) {
+int snake_free (Snake * snake) {
+	while (snake != NULL) {
+		free(snake);
+		snake = snake->next;
+	}
+	return NULL;
+}
 
-	const int HEIGHT = 800;
-	const int WIDTH  = 800;
-	const int SCL    = 20;
+
+
+/**
+ *
+ */
+int main (int argc, char** argv) {
 
 	Apple * apple           = NULL;
 	Snake * head            = NULL;
@@ -130,9 +188,9 @@ int main (int argc, char** argv) {
 	int close               = 0;
 	int hit                 = 0;
 
-    head = init_snake(SCL,
-    		          floor(((WIDTH/2)/SCL)*SCL),
+    head = init_snake(floor(((WIDTH/2)/SCL)*SCL),
     		          floor(((HEIGHT/2)/SCL)*SCL), 1, 1);
+
 
     if ( head == NULL) {
     	SDL_Log("INIT SNAKE HEAD failed");
@@ -159,10 +217,10 @@ int main (int argc, char** argv) {
 	SDL_Event event;
 	time_t t;
 	srand((unsigned) time(&t));
-	apple =  init_apple(SCL,WIDTH,HEIGHT);
+	apple =  init_apple(WIDTH,HEIGHT);
 	while (!close) {
 
-		Uint64 start = SDL_GetPerformanceCounter();
+		//Uint64 start = SDL_GetPerformanceCounter();
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -188,8 +246,10 @@ int main (int argc, char** argv) {
 			}
 		}
 
-		if (snake_eat(apple,head,SCL)) {
-			apple = init_apple(SCL,WIDTH,HEIGHT);
+		if (snake_eat(renderer,apple,head)) {
+			apple = init_apple(WIDTH,HEIGHT);
+			hit++;
+			snake_add_tail(head);
 		}
 
 
@@ -216,13 +276,14 @@ int main (int argc, char** argv) {
 		SDL_RenderPresent(renderer);
 
 
-		Uint64 end = SDL_GetPerformanceCounter();
+		//Uint64 end = SDL_GetPerformanceCounter();
 
 		//float elapsedMS = (end - start) / (float)SDL_GetPerformanceFrequency() * 1000.0f;
 		//SDL_Delay(floor(16.000f-elapsedMS));
 
 	}
 
+    snake_free(head);
 	free(apple);
 	SDL_DestroyWindow(window);
 	SDL_DestroyRenderer(renderer);
