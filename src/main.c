@@ -15,6 +15,7 @@
 const int HEIGHT = 800;
 const int WIDTH  = 800;
 const int SCL    = 20;
+const int GRID   = 1600;
 
 typedef struct Snake_t {
 	int w;
@@ -36,6 +37,7 @@ typedef struct {
 	int y;
 } Apple;
 
+
 /**
  *
  */
@@ -56,72 +58,36 @@ Apple * init_apple (int w, int h) {
 /**
  *
  */
-Snake * init_snake (int x, int y, int spdX, int spdY) {
-	Snake * s = (Snake * ) malloc(sizeof(Snake));
-	if (s != NULL) {
-		s->w = SCL;
-		s->h = SCL;
-		s->x = x;
-		s->y = y;
-		s->speedX = spdX;
-		s->speedY = spdY;
-		s->dirX = 0;
-		s->dirY = 1;
-		s->next = NULL;
-		return s;
-	} else {
-		return NULL;
-	}
+Snake init_snake (int x, int y, int spdX, int spdY) {
+	Snake s ;
+	s.w = SCL;
+	s.h = SCL;
+	s.x = x;
+	s.y = y;
+	s.speedX = spdX;
+	s.speedY = spdY;
+	s.dirX = 0;
+	s.dirY = 1;
+	s.next = NULL;
+	return s;
 }
 
 
 /**
  *
  */
-Snake * snake_add_tail (Snake * head) {
-
-	if (head != NULL) {
-	  Snake * new = init_snake(0, 0, 0, 0);
-      Snake * end = (Snake * ) malloc(sizeof(Snake));
-
-	  if (new != NULL) {
-		  if (head->next == NULL) {
-			  head->next = new;
-		  } else {
-			 end = head->next;
-			 end->next = new;
-			 head->next = end;
-		  }
-	  }
-
-
-	}
-
-	return head;
-}
-
-
-/**
- *
- */
-void draw_snake (SDL_Renderer * renderer, Snake * snake) {
-	Snake * tmp;
+void draw_snake (SDL_Renderer * renderer, Snake tail[], int hit) {
 	SDL_Rect rect;
 
-
-	tmp = snake;
-	while (tmp != NULL) {
-		rect.h = snake->h;
-		rect.w = snake->w;
-		rect.x = snake->x;
-		rect.y = snake->y;
+	for(int i=0; i<hit+1; i++) {
 		SDL_SetRenderDrawColor(renderer,0, 255, 0, 255);
+		rect.h = tail[i].h;
+		rect.w = tail[i].w;
+		rect.x = tail[i].x;
+		rect.y = tail[i].y;
 		SDL_RenderFillRect(renderer, &rect);
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		tmp = tmp->next;
 	}
-
-
 }
 
 
@@ -143,35 +109,27 @@ void draw_apple (SDL_Renderer * renderer, Apple * apple) {
 /**
  *
  */
-int snake_eat (SDL_Renderer * renderer, Apple * apple, Snake * snake) {
+int snake_eats (Apple * apple, Snake * snake) {
 	double snake_mX = (snake->x + snake->x + SCL)/2.0;
 	double snake_mY = (snake->y + snake->y + SCL)/2.0;
 
 	double apple_mX = (apple->x + apple->x + SCL)/2.0;
 	double apple_mY = (apple->y + apple->y + SCL)/2.0;
 
-	/*SDL_SetRenderDrawColor(renderer,255, 255, 0, 255);
-	SDL_RenderDrawLine(renderer,
-			            floor(snake_mX),
-						floor(snake_mY),
-						floor(apple_mX),
-						floor(apple_mY));
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);*/
-
 	double dist = (abs((snake_mX * snake_mX) - (apple_mX * apple_mX)) + abs((snake_mY * snake_mY) - (apple_mY * apple_mY)));
 
-	return sqrt(dist) >= 0.0 && sqrt(dist) <= 70.0;
+	return sqrt(dist) == 0.0;
 }
 
-/**
- *
- */
-int snake_free (Snake * snake) {
-	while (snake != NULL) {
-		free(snake);
-		snake = snake->next;
-	}
-	return NULL;
+
+int snake_eats_snake (Snake * tete, Snake  * tail) {
+	double dist = 0.0;
+	double tete_mX = (tete->x + tete->x + SCL)/2;
+    double tete_mY = (tete->y + tete->y + SCL)/2;
+    double tail_mX = (tail->x + tail->x + SCL)/2;
+    double tail_mY = (tail->y + tail->y + SCL)/2;
+    dist = (abs((tete_mX * tete_mX) - (tail_mX * tail_mX)) + abs((tete_mY * tete_mY) - (tail_mY * tail_mY)));
+	return sqrt(dist);
 }
 
 
@@ -181,21 +139,14 @@ int snake_free (Snake * snake) {
  */
 int main (int argc, char** argv) {
 
+	Snake tail[GRID+1];
+	Snake tmp[GRID+1];
 	Apple * apple           = NULL;
-	Snake * head            = NULL;
 	SDL_Window   * window  	= NULL;
 	SDL_Renderer * renderer = NULL;
 	int close               = 0;
 	int hit                 = 0;
-
-    head = init_snake(floor(((WIDTH/2)/SCL)*SCL),
-    		          floor(((HEIGHT/2)/SCL)*SCL), 1, 1);
-
-
-    if ( head == NULL) {
-    	SDL_Log("INIT SNAKE HEAD failed");
-    	return EXIT_FAILURE;
-    }
+	int lost                = 0;
 
 	if (SDL_Init(SDL_INIT_EVERYTHING)) {
 		SDL_Log("INIT SDL failed... %s", SDL_GetError());
@@ -218,9 +169,11 @@ int main (int argc, char** argv) {
 	time_t t;
 	srand((unsigned) time(&t));
 	apple =  init_apple(WIDTH,HEIGHT);
-	while (!close) {
+	tail[0] = init_snake(floor(((WIDTH/2)/SCL)*SCL),floor(((HEIGHT/2)/SCL)*SCL),SCL,SCL);
 
-		//Uint64 start = SDL_GetPerformanceCounter();
+	while (!close && hit < GRID+1) {
+
+		Uint64 start = SDL_GetPerformanceCounter();
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -229,61 +182,84 @@ int main (int argc, char** argv) {
 					if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE){
 						close = 1;
 					} else if (event.key.keysym.scancode == SDL_SCANCODE_UP) {
-						head->dirX = 0;
-						head->dirY = -1;
+						tail[0].dirX = 0;
+						tail[0].dirY = -1;
 					} else if (event.key.keysym.scancode == SDL_SCANCODE_DOWN) {
-						head->dirX = 0;
-						head->dirY = 1;
+						tail[0].dirX = 0;
+						tail[0].dirY = 1;
 					} else if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
-						head->dirX = 1;
-					    head->dirY = 0;
+						tail[0].dirX = 1;
+						tail[0].dirY = 0;
 					} else if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) {
-						head->dirX = -1;
-						head->dirY = 0;
+						tail[0].dirX = -1;
+						tail[0].dirY = 0;
 					}
 					break;
 				}
 			}
 		}
 
-		if (snake_eat(renderer,apple,head)) {
+		if (snake_eats(apple,&tail[0])) {
 			apple = init_apple(WIDTH,HEIGHT);
 			hit++;
-			snake_add_tail(head);
 		}
 
+		for (int i=0; i<hit+1; i++) {
+			tmp[i] = tail[i];
+		}
+		for (int k=1; k<hit+1; k++) {
+			tail[k] = tmp[k-1];
+		}
 
-		head->x += head->speedX * head->dirX;
-        head->y += head->speedY * head->dirY;
+		tail[0].x += tail[0].speedX * tail[0].dirX;
+		tail[0].y += tail[0].speedY * tail[0].dirY;
 
-        if (head->x < 0)
-        	head->x = 0;
+		if (tail[0].x <= 0) {
+			tail[0].x = 0;
+		}
 
-        if (head->x > WIDTH-SCL)
-        	head->x = WIDTH-SCL;
+		if (tail[0].x >= WIDTH-SCL) {
+			tail[0].x =  WIDTH-SCL;
+		}
 
-        if (head->y < 0)
-        	head->y = 0;
+		if (tail[0].y <= 0) {
+			tail[0].y = 0;
+		}
 
-        if (head->y > HEIGHT-SCL)
-            head->y = WIDTH-SCL;
+		if (tail[0].y >= HEIGHT-SCL) {
+			tail[0].y = HEIGHT-SCL;
+		}
+
+		for (int i=2; i<hit+1; i++) {
+			if (snake_eats_snake(&tail[0],&tail[i]) == 0) {
+				lost = 1;
+				break;
+			}
+		}
 
 		SDL_RenderClear(renderer);
 
-		draw_snake(renderer,head);
-		draw_apple(renderer, apple);
+		if (!lost) {
+			draw_snake(renderer,tail,hit);
+			draw_apple(renderer, apple);
+		} else {
+
+		}
 
 		SDL_RenderPresent(renderer);
 
 
-		//Uint64 end = SDL_GetPerformanceCounter();
+		Uint64 end = SDL_GetPerformanceCounter();
 
-		//float elapsedMS = (end - start) / (float)SDL_GetPerformanceFrequency() * 1000.0f;
-		//SDL_Delay(floor(16.000f-elapsedMS));
+		float elapsedMS = (end - start) / (float)SDL_GetPerformanceFrequency() * 1000.0f;
+
+		if (close == 0) {
+			SDL_Delay(20*(int)(floor(abs(16.000f-elapsedMS))));
+		}
 
 	}
 
-    snake_free(head);
+
 	free(apple);
 	SDL_DestroyWindow(window);
 	SDL_DestroyRenderer(renderer);
